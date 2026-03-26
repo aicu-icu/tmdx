@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { minify } from 'terser';
-import JavaScriptObfuscator from 'javascript-obfuscator';
+// import JavaScriptObfuscator from 'javascript-obfuscator';
 import { readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -12,22 +12,22 @@ const publicDir = join(__dirname, 'internal', 'static', 'public');
 // Files to process
 const targets = ['app.js', 'themes.js', 'analytics.js', 'tutorial.js', 'tutorial-getting-started.js', 'tutorial-panes.js'];
 
-// Obfuscator config — focused on making code unreadable without bloating size
-const obfuscatorOptions = {
-  compact: true,
-  controlFlowFlattening: false,
-  deadCodeInjection: false,
-  identifierNamesGenerator: 'hexadecimal',
-  renameGlobals: false,
-  selfDefending: false,
-  stringArray: true,
-  stringArrayEncoding: ['none'],
-  stringArrayThreshold: 0.75,
-  unicodeEscapeSequence: false,
-};
+// Obfuscator config — disabled, only minification is used
+// const obfuscatorOptions = {
+//   compact: true,
+//   controlFlowFlattening: false,
+//   deadCodeInjection: false,
+//   identifierNamesGenerator: 'hexadecimal',
+//   renameGlobals: false,
+//   selfDefending: false,
+//   stringArray: true,
+//   stringArrayEncoding: ['none'],
+//   stringArrayThreshold: 0.75,
+//   unicodeEscapeSequence: false,
+// };
 
 async function build() {
-  console.log('Building minified + obfuscated JS...\n');
+  console.log('Building minified JS...\n');
 
   for (const file of targets) {
     const inputPath = join(srcDir, file);
@@ -36,7 +36,7 @@ async function build() {
     const source = readFileSync(inputPath, 'utf8');
     const originalSize = Buffer.byteLength(source);
 
-    // Step 1: Terser minification
+    // Terser minification
     const isModule = file === 'app.js'; // app.js uses ES module imports
     const minified = await minify(source, {
       compress: {
@@ -58,9 +58,8 @@ async function build() {
       process.exit(1);
     }
 
-    // Step 2: javascript-obfuscator
-    const obfuscated = JavaScriptObfuscator.obfuscate(minified.code, obfuscatorOptions);
-    const finalCode = obfuscated.getObfuscatedCode();
+    // Obfuscation disabled - using minified code directly
+    const finalCode = minified.code;
     const finalSize = Buffer.byteLength(finalCode);
 
     writeFileSync(outputPath, finalCode);

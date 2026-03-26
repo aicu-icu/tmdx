@@ -9287,7 +9287,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
   }
 
   // Debug helper - expose internals for debugging
-  window.TC2_DEBUG = {
+  window.TMDX_DEBUG = {
     get terminals() { return terminals; },
     get state() { return state; },
     get ws() { return ws; },

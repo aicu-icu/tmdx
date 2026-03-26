@@ -89,7 +89,7 @@ func (ts *TmuxService) DiscoverExistingTerminals() ([]*Terminal, error) {
 
 	sessions := strings.Split(strings.TrimSpace(string(output)), "\n")
 	for _, session := range sessions {
-		if !strings.HasPrefix(session, "tc2-") {
+		if !strings.HasPrefix(session, "tmdx-") {
 			continue
 		}
 
@@ -101,7 +101,7 @@ func (ts *TmuxService) DiscoverExistingTerminals() ([]*Terminal, error) {
 			}
 		}
 
-		id := strings.TrimPrefix(session, "tc2-")
+		id := strings.TrimPrefix(session, "tmdx-")
 		if savedTerminal != nil {
 			id = savedTerminal.ID
 		}
@@ -181,7 +181,7 @@ func (ts *TmuxService) ListTerminals() []*Terminal {
 // CreateTerminal creates a new tmux terminal
 func (ts *TmuxService) CreateTerminal(workingDir string, position *metrics.Position, size *metrics.Size) (*Terminal, error) {
 	id := uuid.New().String()
-	sessionName := fmt.Sprintf("tc2-%s", id)
+	sessionName := fmt.Sprintf("tmdx-%s", id)
 
 	validatedDir, err := sanitize.ValidateWorkingDirectory(workingDir)
 	if err != nil {
@@ -226,7 +226,7 @@ func (ts *TmuxService) CreateTerminal(workingDir string, position *metrics.Posit
 
 // ResumeTerminal resumes a terminal with a new tmux session
 func (ts *TmuxService) ResumeTerminal(terminalID, workingDir, command string) (*Terminal, error) {
-	sessionName := fmt.Sprintf("tc2-%s", terminalID)
+	sessionName := fmt.Sprintf("tmdx-%s", terminalID)
 
 	validatedDir, err := sanitize.ValidateWorkingDirectory(workingDir)
 	if err != nil {
@@ -514,7 +514,7 @@ func (ts *TmuxService) BatchGetSessionInfo() map[string]map[string]interface{} {
 	ts.mu.RUnlock()
 
 	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
-		if !strings.HasPrefix(line, "tc2-") {
+		if !strings.HasPrefix(line, "tmdx-") {
 			continue
 		}
 
@@ -538,7 +538,7 @@ func (ts *TmuxService) BatchGetSessionInfo() map[string]map[string]interface{} {
 			continue
 		}
 
-		results[strings.TrimPrefix(session, "tc2-")] = map[string]interface{}{
+		results[strings.TrimPrefix(session, "tmdx-")] = map[string]interface{}{
 			"session":     session,
 			"command":     command,
 			"cwd":         cwd,
