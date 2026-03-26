@@ -1,0 +1,11 @@
+agent/tmd-agent
+agent/build/
+cloud/tmd-cloud
+dist/
+*.tar.gz
+*.db*
+node_modules
+package-lock.json
+*.min.js
+test/
+logs/

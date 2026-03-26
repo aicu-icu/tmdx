@@ -1,0 +1,172 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run agent tests
+        working-directory: agent
+        run: go test ./...
+
+      - name: Run cloud tests
+        working-directory: cloud
+        run: go test ./...
+
+  build-agent:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
+          - goos: linux
+            goarch: arm
+            goarm: '7'
+            suffix: linux-arm
+          - goos: darwin
+            goarch: amd64
+            suffix: darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            suffix: darwin-arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+
+      - name: Build
+        working-directory: agent
+        env:
+          CGO_ENABLED: '0'
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          go build \
+            -ldflags "-X agent/internal/config.Version=${{ steps.version.outputs.VERSION }}" \
+            -o tmd-agent-${{ matrix.suffix }} \
+            ./cmd/tmd-agent
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tmd-agent-${{ matrix.suffix }}
+          path: agent/tmd-agent-${{ matrix.suffix }}
+          if-no-files-found: error
+
+  build-cloud:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+
+      - name: Inject version to frontend
+        working-directory: cloud
+        run: |
+          sed -i "s/window.__VERSION__ = '';/window.__VERSION__ = '${{ steps.version.outputs.VERSION }}';/" \
+            src-client/app.js
+
+      - name: Build frontend
+        working-directory: cloud
+        run: npm ci && npm run build
+
+      - name: Build cloud binary
+        working-directory: cloud
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          go build \
+            -ldflags "-X cloud/internal/version.Version=${{ steps.version.outputs.VERSION }}" \
+            -o tmd-cloud-linux-amd64 \
+            ./cmd/cloud/
+
+      - name: Restore app.js
+        working-directory: cloud
+        run: |
+          sed -i "s/window.__VERSION__ = '${{ steps.version.outputs.VERSION }}';/window.__VERSION__ = '';/" \
+            src-client/app.js
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tmd-cloud-linux-amd64
+          path: cloud/tmd-cloud-linux-amd64
+          if-no-files-found: error
+
+  release:
+    needs: [build-agent, build-cloud]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "VERSION=$(cat VERSION | tr -d '[:space:]')" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: Release v${{ steps.version.outputs.VERSION }}
+          generate_release_notes: true
+          files: artifacts/*
