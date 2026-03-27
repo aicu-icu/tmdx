@@ -86,6 +86,34 @@ func UpdateUserTier(userID, tier string) {
 	db.Exec(`UPDATE users SET tier=?, updated_at=datetime('now') WHERE id=?`, tier, userID)
 }
 
+func UpdateUserRole(userID, role string) {
+	db.Exec(`UPDATE users SET role=?, updated_at=datetime('now') WHERE id=?`, role, userID)
+}
+
+func ListUsers() ([]User, error) {
+	rows, err := db.Query(`SELECT id, username, display_name, role, tier, created_at, updated_at
+		FROM users ORDER BY created_at ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		var displayName sql.NullString
+		if err := rows.Scan(&u.ID, &u.Username, &displayName, &u.Role,
+			&u.Tier, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		if displayName.Valid {
+			u.DisplayName = &displayName.String
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
 func scanUser(row *sql.Row) (*User, error) {
 	var u User
 	var displayName sql.NullString

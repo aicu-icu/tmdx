@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -377,6 +378,87 @@ func SetupApiRoutes(r *gin.Engine) {
 
 		fmt.Printf("[api] Pairing approved: %s -> agent %s for user %s\n", body.Code, agent.ID, user.ID)
 		c.JSON(200, gin.H{"ok": true, "agentId": agent.ID})
+	})
+
+	// --- Admin Routes ---
+	adminApi := api.Group("/admin", auth.RequireAuth(), auth.RequireAdmin())
+
+	// GET /api/admin/users
+	adminApi.GET("/users", func(c *gin.Context) {
+		users, err := db.ListUsers()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to list users"})
+			return
+		}
+		type safeUser struct {
+			ID          string  `json:"id"`
+			Username    string  `json:"username"`
+			DisplayName *string `json:"displayName"`
+			Role        string  `json:"role"`
+			Tier        string  `json:"tier"`
+			CreatedAt   string  `json:"createdAt"`
+		}
+		result := make([]safeUser, 0, len(users))
+		for _, u := range users {
+			result = append(result, safeUser{
+				ID: u.ID, Username: u.Username, DisplayName: u.DisplayName,
+				Role: u.Role, Tier: u.Tier, CreatedAt: u.CreatedAt,
+			})
+		}
+		c.JSON(200, gin.H{"users": result})
+	})
+
+	// PATCH /api/admin/users/:id
+	adminApi.PATCH("/users/:id", func(c *gin.Context) {
+		targetID := c.Param("id")
+		currentUser := auth.GetUser(c)
+
+		target, err := db.GetUserByID(targetID)
+		if err != nil || target == nil {
+			c.JSON(404, gin.H{"error": "User not found"})
+			return
+		}
+
+		var body struct {
+			Role *string `json:"role"`
+			Tier *string `json:"tier"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		// Validate and update role
+		if body.Role != nil {
+			role := strings.ToLower(*body.Role)
+			if role != "admin" && role != "user" {
+				c.JSON(400, gin.H{"error": "Invalid role, must be 'admin' or 'user'"})
+				return
+			}
+			// Prevent self-demotion
+			if targetID == currentUser.ID && role != "admin" {
+				c.JSON(400, gin.H{"error": "Cannot change your own admin role"})
+				return
+			}
+			db.UpdateUserRole(targetID, role)
+		}
+
+		// Validate and update tier
+		if body.Tier != nil {
+			tier := strings.ToLower(*body.Tier)
+			if tier != "free" && tier != "pro" && tier != "poweruser" {
+				c.JSON(400, gin.H{"error": "Invalid tier, must be 'free', 'pro', or 'poweruser'"})
+				return
+			}
+			db.UpdateUserTier(targetID, tier)
+		}
+
+		updated, _ := db.GetUserByID(targetID)
+		if updated == nil {
+			c.JSON(500, gin.H{"error": "Failed to fetch updated user"})
+			return
+		}
+		c.JSON(200, gin.H{"ok": true, "role": updated.Role, "tier": updated.Tier})
 	})
 }
 

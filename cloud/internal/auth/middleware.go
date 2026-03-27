@@ -73,6 +73,23 @@ func sendUnauthorized(c *gin.Context) {
 	c.Abort()
 }
 
+func RequireAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := GetUser(c)
+		if user == nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			c.Abort()
+			return
+		}
+		if user.Role != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Admin access required"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 func GetUser(c *gin.Context) *db.User {
 	if u, exists := c.Get("user"); exists {
 		if user, ok := u.(*db.User); ok {
