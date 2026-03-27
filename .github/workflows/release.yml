@@ -110,7 +110,7 @@ jobs:
         working-directory: cloud
         run: |
           sed -i "s/window.__VERSION__ = '';/window.__VERSION__ = '${{ steps.version.outputs.VERSION }}';/" \
-            src-client/app.js
+            src-client/core.js
 
       - name: Build frontend
         working-directory: cloud
@@ -128,11 +128,11 @@ jobs:
             -o tmd-cloud-linux-amd64 \
             ./cmd/cloud/
 
-      - name: Restore app.js
+      - name: Restore core.js
         working-directory: cloud
         run: |
           sed -i "s/window.__VERSION__ = '${{ steps.version.outputs.VERSION }}';/window.__VERSION__ = '';/" \
-            src-client/app.js
+            src-client/core.js
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
