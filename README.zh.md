@@ -93,7 +93,7 @@ chmod +x tmd-agent
 
 ## 文档
 
-- [开发指南](README.dev.zh.md) - 构建、开发、项目结构
+- [开发指南](docs/README.dev.zh.md) - 构建、开发、项目结构
 
 ## 致谢
 

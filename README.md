@@ -93,7 +93,7 @@ Done! Refresh Web UI to see your machine.
 
 ## Documentation
 
-- [Developer Guide](README.dev.md) - Build, development, project structure
+- [Developer Guide](docs/README.dev.md) - Build, development, project structure
 
 ## Acknowledgments
 
