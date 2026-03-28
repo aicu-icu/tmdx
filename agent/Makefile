@@ -78,10 +78,16 @@ vet:
 build-linux:
 	GOOS=linux GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/tmd-agent
 
+build-linux-arm:
+	GOOS=linux GOARCH=arm GOARM=6 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-armv6 ./cmd/tmd-agent
+
+build-linux-arm64:
+	GOOS=linux GOARCH=arm64 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/tmd-agent
+
 build-darwin:
 	GOOS=darwin GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/tmd-agent
 
 build-darwin-arm64:
 	GOOS=darwin GOARCH=arm64 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 ./cmd/tmd-agent
 
-build-all: build-linux build-darwin build-darwin-arm64
+build-all: build-linux build-linux-arm build-linux-arm64 build-darwin build-darwin-arm64
