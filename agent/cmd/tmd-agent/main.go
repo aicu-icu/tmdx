@@ -17,6 +17,7 @@ import (
 	"agent/internal/router"
 	metrics "agent/internal/services"
 	"agent/internal/terminal"
+	"agent/internal/update"
 )
 
 const (
@@ -46,6 +47,8 @@ func main() {
 		handleConfig(args[1:], authMgr)
 	case "install-service":
 		handleInstallService(cfg)
+	case "update":
+		handleUpdate(cfg)
 	case "help", "--help", "-h":
 		printHelp(cfg)
 	case "--version", "-v":
@@ -462,6 +465,43 @@ func handleStop(cfg *config.Config) {
 	os.Remove(pidFile)
 }
 
+func handleUpdate(cfg *config.Config) {
+	currentVersion := cfg.Version
+	if currentVersion == "dev" {
+		fmt.Println("[tmd-agent] Development build, cannot update.")
+		return
+	}
+
+	suffix := config.GetPlatformSuffix()
+	fmt.Printf("[tmd-agent] Checking for updates (platform: %s)...\n", suffix)
+
+	info, err := update.CheckLatest(suffix)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[tmd-agent] Failed to check for updates: %v\n", err)
+		os.Exit(1)
+	}
+
+	if !info.HasAsset {
+		fmt.Fprintf(os.Stderr, "[tmd-agent] No release asset found for platform %s\n", suffix)
+		os.Exit(1)
+	}
+
+	if !update.IsVersionOutdated(currentVersion, info.Version) {
+		fmt.Printf("[tmd-agent] Already up to date (v%s)\n", currentVersion)
+		return
+	}
+
+	fmt.Printf("[tmd-agent] New version available: v%s → v%s\n", currentVersion, info.Version)
+	fmt.Printf("[tmd-agent] Downloading update...\n")
+
+	if err := update.DownloadAndReplace(info.DownloadURL); err != nil {
+		fmt.Fprintf(os.Stderr, "[tmd-agent] Update failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("[tmd-agent] Updated successfully to v%s\n", info.Version)
+}
+
 func handleInstallService(cfg *config.Config) {
 	execPath, _ := filepath.Abs(os.Args[0])
 
@@ -541,6 +581,7 @@ Commands:
   status                      Show agent status and config
   stop                        Stop the background agent
   install-service             System service install instructions
+  update                      Check for and install updates
   --version, -v               Show version
 
 Examples:

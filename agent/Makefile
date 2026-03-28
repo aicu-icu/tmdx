@@ -79,7 +79,7 @@ build-linux:
 	GOOS=linux GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/tmd-agent
 
 build-linux-arm:
-	GOOS=linux GOARCH=arm GOARM=6 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-armv6 ./cmd/tmd-agent
+	GOOS=linux GOARCH=arm GOARM=6 $(GO) build -ldflags "-X agent/internal/config.PlatformSuffix=linux-armv6" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-armv6 ./cmd/tmd-agent
 
 build-linux-arm64:
 	GOOS=linux GOARCH=arm64 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 ./cmd/tmd-agent

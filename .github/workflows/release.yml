@@ -77,8 +77,12 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
         run: |
+          EXTRA_LDFLAGS=""
+          if [ "${{ matrix.suffix }}" = "linux-armv6" ]; then
+            EXTRA_LDFLAGS="-X agent/internal/config.PlatformSuffix=linux-armv6"
+          fi
           go build \
-            -ldflags "-X agent/internal/config.Version=${{ steps.version.outputs.VERSION }}" \
+            -ldflags "-X agent/internal/config.Version=${{ steps.version.outputs.VERSION }} ${EXTRA_LDFLAGS}" \
             -o tmd-agent-${{ matrix.suffix }} \
             ./cmd/tmd-agent
 

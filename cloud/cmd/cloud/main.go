@@ -16,6 +16,7 @@ import (
 	"cloud/internal/db"
 	"cloud/internal/routes"
 	"cloud/internal/static"
+	"cloud/internal/update"
 	"cloud/internal/version"
 	"cloud/internal/ws"
 )
@@ -35,6 +36,9 @@ func main() {
 			return
 		case "--debug":
 			debug = true
+		case "--update":
+			handleUpdate()
+			return
 		}
 	}
 
@@ -168,6 +172,42 @@ func setupLandingRoutes(r *gin.Engine, cfg *config.Config) {
 	})
 }
 
+func handleUpdate() {
+	currentVersion := version.Version
+	if currentVersion == "dev" {
+		fmt.Println("[cloud] Development build, cannot update.")
+		return
+	}
+
+	fmt.Println("[cloud] Checking for updates...")
+
+	info, err := update.CheckLatest()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[cloud] Failed to check for updates: %v\n", err)
+		os.Exit(1)
+	}
+
+	if !info.HasAsset {
+		fmt.Fprintf(os.Stderr, "[cloud] No release asset found for this platform\n")
+		os.Exit(1)
+	}
+
+	if !update.IsVersionOutdated(currentVersion, info.Version) {
+		fmt.Printf("[cloud] Already up to date (v%s)\n", currentVersion)
+		return
+	}
+
+	fmt.Printf("[cloud] New version available: v%s → v%s\n", currentVersion, info.Version)
+	fmt.Printf("[cloud] Downloading update...\n")
+
+	if err := update.DownloadAndReplace(info.DownloadURL); err != nil {
+		fmt.Fprintf(os.Stderr, "[cloud] Update failed: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("[cloud] Updated successfully to v%s\n", info.Version)
+}
+
 func printHelp() {
 	fmt.Printf(`tmdx Cloud v%s
 
@@ -175,6 +215,7 @@ Usage: tmd-cloud [options]
 
 Options:
   --debug       Enable Gin debug logging
+  --update      Check for and install updates
   --version, -v Show version
   --help, -h    Show this help
 `, version.Version)

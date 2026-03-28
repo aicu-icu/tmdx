@@ -34,7 +34,7 @@ echo "[agent] go build (linux/arm64)..."
 
 echo "[agent] go build (linux/armv6)..."
 (cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=6 go build \
-  -ldflags "-X agent/internal/config.Version=${VERSION}" \
+  -ldflags "-X agent/internal/config.Version=${VERSION} -X agent/internal/config.PlatformSuffix=linux-armv6" \
   -o "../${DIST_DIR}/tmd-agent-linux-armv6" ./cmd/tmd-agent)
 
 echo "[agent] go build (darwin/arm64)..."
