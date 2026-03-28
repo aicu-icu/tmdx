@@ -50,6 +50,28 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 CREATE INDEX IF NOT EXISTS idx_notes_user ON notes(user_id);
 
+CREATE TABLE IF NOT EXISTS todo_groups (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_todo_groups_user ON todo_groups(user_id);
+
+CREATE TABLE IF NOT EXISTS todo_items (
+  id           TEXT PRIMARY KEY,
+  group_id     TEXT NOT NULL REFERENCES todo_groups(id) ON DELETE CASCADE,
+  user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title        TEXT NOT NULL,
+  notes        TEXT NOT NULL DEFAULT '',
+  sort_order   INTEGER NOT NULL DEFAULT 0,
+  completed_at TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_todo_items_user ON todo_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_todo_items_group ON todo_items(group_id);
+
 CREATE TABLE IF NOT EXISTS view_state (
   user_id       TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   zoom          REAL NOT NULL DEFAULT 1.0,

@@ -85,6 +85,9 @@ func main() {
 	// Layout persistence routes
 	routes.SetupLayoutRoutes(r)
 
+	// Todo routes
+	routes.SetupTodoRoutes(r)
+
 	// User preferences routes
 	routes.SetupPreferencesRoutes(r)
 

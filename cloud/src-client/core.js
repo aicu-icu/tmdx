@@ -21,6 +21,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
     'git-graph': { width: 500, height: 450 },
     'iframe':    { width: 800, height: 600 },
     'folder':    { width: 400, height: 500 },
+    'todo':      { width: 420, height: 500 },
   };
 
   let state = {
@@ -42,6 +43,9 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
 
   // Folder panes map (paneId -> { refreshInterval })
   const folderPanes = new Map();
+
+  // Todo panes map (paneId -> { todoData })
+  const todoPanes = new Map();
 
   // === Notification System State ===
   let notificationContainer = null;
@@ -454,7 +458,7 @@ import { WebLinksAddon } from './lib/addon-web-links.mjs';
   }
 
   // Pane type to REST endpoint mapping (shared)
-  const PANE_ENDPOINT_MAP = { file: 'file-panes', note: 'notes', terminal: 'terminals', 'git-graph': 'git-graphs', iframe: 'iframes', folder: 'folder-panes' };
+  const PANE_ENDPOINT_MAP = { file: 'file-panes', note: 'notes', terminal: 'terminals', 'git-graph': 'git-graphs', iframe: 'iframes', folder: 'folder-panes', todo: 'todos' };
 
   // Shared SVG icon inner content (without <svg> wrapper, for flexible reuse with different sizes/styles)
   const ICON_GIT_GRAPH = '<circle cx="7" cy="6" r="2.5" fill="currentColor"/><circle cx="17" cy="6" r="2.5" fill="currentColor"/><circle cx="7" cy="18" r="2.5" fill="currentColor"/><line x1="7" y1="8.5" x2="7" y2="15.5" stroke="currentColor" stroke-width="2"/><path d="M17 8.5c0 4-10 4-10 7" stroke="currentColor" stroke-width="2" fill="none"/>';

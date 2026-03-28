@@ -77,6 +77,8 @@ func hasOldUserSchema() bool {
 
 func dropAllTables() {
 	tables := []string{
+		"todo_items",
+		"todo_groups",
 		"messages",
 		"events",
 		"page_views",
