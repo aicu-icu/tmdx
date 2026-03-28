@@ -1648,7 +1648,6 @@
     pane.innerHTML = `
       <div class="pane-header">
         <span class="pane-title">\u2705 Todo</span>
-        ${paneNameHtml(paneData)}
         <div class="pane-header-right">
           ${shortcutBadgeHtml(paneData)}
           <button class="pane-close" aria-label="Close pane"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -1706,27 +1705,40 @@
     const done = !!item.completed_at;
     const completedClass = done ? ' completed' : '';
     const timeLabel = formatTodoTime(item);
+    const notesClass = item.notes ? 'has-notes' : 'no-notes';
+    const notesTooltip = item.notes ? 'Edit notes' : 'Add notes';
     return `
       <div class="todo-item${completedClass}" data-item-id="${item.id}">
         <button class="todo-item-checkbox" data-item-id="${item.id}" data-completed="${done}" aria-label="Toggle complete">
           ${done ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'}
         </button>
         <span class="todo-item-title" data-item-id="${item.id}">${escapeHtml(item.title)}</span>
-        ${item.notes ? '<span class="todo-item-has-notes" data-tooltip="Has notes">\u{1F4DD}</span>' : ''}
+        ${item.notes ? '<span class="todo-item-has-notes">\u{1F4DD}</span>' : ''}
         ${timeLabel ? `<span class="todo-item-time">${timeLabel}</span>` : ''}
-        <button class="todo-item-menu-btn" data-item-id="${item.id}" data-tooltip="Item actions">\u22EF</button>
+        <div class="todo-item-actions">
+          <button class="todo-item-notes-btn ${notesClass}" data-item-id="${item.id}" data-tooltip="${notesTooltip}">\u{1F4DD}</button>
+          <button class="todo-item-delete-btn" data-item-id="${item.id}" data-tooltip="Delete">\u{1F5D1}</button>
+        </div>
       </div>
     `;
   }
 
+  function parseTodoDate(str) {
+    if (!str) return null;
+    // Handle old SQLite format with space separator (YYYY-MM-DD HH:MM:SS)
+    const iso = str.includes('T') ? str : str.replace(' ', 'T');
+    const d = new Date(iso + 'Z');
+    return isNaN(d.getTime()) ? null : d;
+  }
+
   function formatTodoTime(item) {
     if (item.completed_at) {
-      const d = new Date(item.completed_at + 'Z');
-      return 'done ' + formatDateShort(d);
+      const d = parseTodoDate(item.completed_at);
+      return d ? 'done ' + formatDateShort(d) : '';
     }
     if (item.created_at) {
-      const d = new Date(item.created_at + 'Z');
-      return formatDateShort(d);
+      const d = parseTodoDate(item.created_at);
+      return d ? formatDateShort(d) : '';
     }
     return '';
   }
@@ -1765,7 +1777,7 @@
     }
 
     // Delegate click events within the container
-    container.addEventListener('click', (e) => {
+    container.addEventListener('click', async (e) => {
       const toggleBtn = e.target.closest('.todo-group-toggle');
       if (toggleBtn) {
         const gid = toggleBtn.dataset.groupId;
@@ -1902,11 +1914,30 @@
         return;
       }
 
-      const itemMenuBtn = e.target.closest('.todo-item-menu-btn');
-      if (itemMenuBtn) {
+      const notesBtn = e.target.closest('.todo-item-notes-btn');
+      if (notesBtn) {
         e.stopPropagation();
-        const itemId = itemMenuBtn.dataset.itemId;
-        showTodoContextMenu(itemMenuBtn, paneEl, paneData, 'item', itemId);
+        const itemId = notesBtn.dataset.itemId;
+        const item = findTodoItem(paneData, itemId);
+        if (item) showTodoNotesEditor(paneEl, paneData, item);
+        return;
+      }
+
+      const deleteBtn = e.target.closest('.todo-item-delete-btn');
+      if (deleteBtn) {
+        e.stopPropagation();
+        const itemId = deleteBtn.dataset.itemId;
+        const item = findTodoItem(paneData, itemId);
+        if (!item) return;
+        if (!confirm(`Delete "${item.title}"?`)) return;
+        try {
+          await cloudFetch('DELETE', `/api/todos/items/${itemId}`);
+          removeTodoItemFromData(paneData, itemId);
+          const paneElRef = document.getElementById(`pane-${paneData.id}`);
+          if (paneElRef) refreshTodoPane(paneElRef, paneData);
+        } catch (e) {
+          console.error('[Todo] Failed to delete item:', e);
+        }
         return;
       }
     });
@@ -1943,26 +1974,18 @@
   }
 
   function showTodoContextMenu(anchorEl, paneEl, paneData, type, id) {
+    // Only used for group actions now; item actions are inline buttons
+    if (type !== 'group') return;
+
     // Remove any existing menu
     const existing = document.querySelector('.todo-context-menu');
     if (existing) existing.remove();
 
     const menu = document.createElement('div');
     menu.className = 'todo-context-menu';
-
-    if (type === 'group') {
-      menu.innerHTML = `
-        <button class="todo-ctx-item todo-ctx-delete-group" data-group-id="${id}">\u{1F5D1} Delete Group</button>
-      `;
-    } else {
-      const item = findTodoItem(paneData, id);
-      const hasNotes = item && item.notes;
-      menu.innerHTML = `
-        ${hasNotes ? `<button class="todo-ctx-item todo-ctx-view-notes" data-item-id="${id}">\u{1F4DD} View Notes</button>` : ''}
-        <button class="todo-ctx-item todo-ctx-edit-notes" data-item-id="${id}">\u270F\uFE0F ${hasNotes ? 'Edit' : 'Add'} Notes</button>
-        <button class="todo-ctx-item todo-ctx-delete-item" data-item-id="${id}">\u{1F5D1} Delete</button>
-      `;
-    }
+    menu.innerHTML = `
+      <button class="todo-ctx-item todo-ctx-delete-group" data-group-id="${id}">\u{1F5D1} Delete Group</button>
+    `;
 
     document.body.appendChild(menu);
 
@@ -1991,42 +2014,6 @@
         } catch (e) {
           console.error('[Todo] Failed to delete group:', e);
         }
-        return;
-      }
-
-      const delItem = ev.target.closest('.todo-ctx-delete-item');
-      if (delItem) {
-        close();
-        const itemId = delItem.dataset.itemId;
-        try {
-          await cloudFetch('DELETE', `/api/todos/items/${itemId}`);
-          removeTodoItemFromData(paneData, itemId);
-          const paneElRef = document.getElementById(`pane-${paneData.id}`);
-          if (paneElRef) refreshTodoPane(paneElRef, paneData);
-        } catch (e) {
-          console.error('[Todo] Failed to delete item:', e);
-        }
-        return;
-      }
-
-      const editNotes = ev.target.closest('.todo-ctx-edit-notes');
-      if (editNotes) {
-        close();
-        const itemId = editNotes.dataset.itemId;
-        const item = findTodoItem(paneData, itemId);
-        if (!item) return;
-        showTodoNotesEditor(paneEl, paneData, item);
-        return;
-      }
-
-      const viewNotes = ev.target.closest('.todo-ctx-view-notes');
-      if (viewNotes) {
-        close();
-        const itemId = viewNotes.dataset.itemId;
-        const item = findTodoItem(paneData, itemId);
-        if (!item) return;
-        showTodoNotesEditor(paneEl, paneData, item);
-        return;
       }
     });
   }

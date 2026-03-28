@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS todo_items (
   notes        TEXT NOT NULL DEFAULT '',
   sort_order   INTEGER NOT NULL DEFAULT 0,
   completed_at TEXT,
-  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at   TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_todo_items_user ON todo_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_todo_items_group ON todo_items(group_id);

@@ -3523,25 +3523,41 @@ body.cursor-suppressed .pane { pointer-events: none !important; }
   flex-shrink: 0;
   white-space: nowrap;
 }
-.todo-item-menu-btn {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.2);
-  cursor: pointer;
-  font-size: 16px;
-  padding: 0 4px;
-  line-height: 1;
+.todo-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   flex-shrink: 0;
-  border-radius: 4px;
   opacity: 0;
   transition: opacity 0.1s;
 }
-.todo-item:hover .todo-item-menu-btn {
+.todo-item:hover .todo-item-actions {
   opacity: 1;
 }
-.todo-item-menu-btn:hover {
+.todo-item-actions button {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.3);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.1s, background 0.1s;
+}
+.todo-item-actions button:hover {
   color: rgba(255,255,255,0.7);
   background: rgba(255,255,255,0.08);
+}
+.todo-item-notes-btn.no-notes {
+  color: rgba(255,255,255,0.15) !important;
+}
+.todo-item-notes-btn.has-notes {
+  color: rgba(99,102,241,0.8) !important;
+}
+.todo-item-notes-btn:hover {
+  color: rgba(99,102,241,1) !important;
+  background: rgba(99,102,241,0.1) !important;
 }
 .todo-add-item-row {
   padding: 3px 6px 3px 0;

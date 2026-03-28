@@ -1,6 +1,9 @@
 package db
 
-import "database/sql"
+import (
+	"database/sql"
+	"time"
+)
 
 type TodoGroup struct {
 	ID        string     `json:"id"`
@@ -128,6 +131,7 @@ func CreateTodoItem(userID, groupID, title string, sortOrder int) (*TodoItem, er
 	}
 	return &TodoItem{
 		ID: id, GroupID: groupID, UserID: userID, Title: title, Notes: "", SortOrder: sortOrder,
+		CreatedAt: time.Now().UTC().Format("2006-01-02T15:04:05"),
 	}, nil
 }
 
@@ -161,7 +165,7 @@ func UpdateTodoItem(itemID, userID string, title *string, notes *string, sortOrd
 // ToggleTodoItem sets or clears completed_at based on the completed flag.
 func ToggleTodoItem(itemID, userID string, completed bool) error {
 	if completed {
-		_, err := db.Exec(`UPDATE todo_items SET completed_at=datetime('now') WHERE id=? AND user_id=?`,
+		_, err := db.Exec(`UPDATE todo_items SET completed_at=strftime('%Y-%m-%dT%H:%M:%S', 'now') WHERE id=? AND user_id=?`,
 			itemID, userID)
 		return err
 	}
