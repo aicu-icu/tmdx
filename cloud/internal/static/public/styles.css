@@ -3340,6 +3340,14 @@ body.cursor-suppressed .pane { pointer-events: none !important; }
   background: #f59e0b;
   animation: update-pulse 2s ease-in-out infinite;
 }
+.hud-version-label {
+  font-size: 10px;
+  color: #94a3b8;
+  opacity: 0.7;
+  margin-left: 2px;
+  flex-shrink: 0;
+  line-height: 20px;
+}
 
 @keyframes update-pulse {
   0%, 100% { opacity: 1; }

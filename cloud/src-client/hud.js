@@ -279,7 +279,7 @@
       if (files > 0) counts.push(`<span class="hud-count" data-tooltip="Files">${fileSvg}${files}</span>`);
       if (counts.length) countsHtml = `<span class="hud-counts">${counts.join('')}</span>`;
 
-      // Agent version dot (green = up to date, yellow = outdated)
+      // Agent version dot (green = up to date, yellow = outdated) + version label
       let versionDotHtml = '';
       const agentEntry = agents.find(a => a.hostname === device.name || a.agentId === device.ip);
       if (agentEntry?.version && online) {
@@ -288,7 +288,7 @@
         const tooltipText = isOutdated
           ? `v${agentEntry.version} — update available. Re-download: click Add Machine, copy the command, re-run on this machine. Kill the old agent process first.`
           : `v${agentEntry.version} — up to date`;
-        versionDotHtml = `<span class="${dotClass2}" data-tooltip="${escapeHtml(tooltipText)}"></span>`;
+        versionDotHtml = `<span class="${dotClass2}" data-tooltip="${escapeHtml(tooltipText)}"></span><span class="hud-version-label">v${escapeHtml(agentEntry.version)}</span>`;
       }
 
       let metricsHtml = '';
