@@ -446,8 +446,9 @@ func SetupApiRoutes(r *gin.Engine) {
 		// Validate and update tier
 		if body.Tier != nil {
 			tier := strings.ToLower(*body.Tier)
-			if tier != "free" && tier != "pro" && tier != "poweruser" {
-				c.JSON(400, gin.H{"error": "Invalid tier, must be 'free', 'pro', or 'poweruser'"})
+			// Validate against DB tier configs
+			if _, err := db.GetTierConfig(tier); err != nil {
+				c.JSON(400, gin.H{"error": "Invalid tier: " + tier})
 				return
 			}
 			db.UpdateUserTier(targetID, tier)
@@ -459,6 +460,177 @@ func SetupApiRoutes(r *gin.Engine) {
 			return
 		}
 		c.JSON(200, gin.H{"ok": true, "role": updated.Role, "tier": updated.Tier})
+	})
+
+	// GET /api/admin/tier-configs
+	adminApi.GET("/tier-configs", func(c *gin.Context) {
+		configs, err := db.GetAllTierConfigs()
+		if err != nil {
+			c.JSON(500, gin.H{"error": "Failed to get tier configs"})
+			return
+		}
+		// Attach user counts
+		type tierInfo struct {
+			db.TierConfig
+			UserCount int `json:"userCount"`
+		}
+		result := make(map[string]tierInfo)
+		for name, cfg := range configs {
+			count, _ := db.CountUsersByTier(name)
+			result[name] = tierInfo{TierConfig: cfg, UserCount: count}
+		}
+		c.JSON(200, gin.H{"configs": result})
+	})
+
+	// PUT /api/admin/tier-configs/:tier — update quota
+	adminApi.PUT("/tier-configs/:tier", func(c *gin.Context) {
+		tierName := strings.ToLower(c.Param("tier"))
+
+		var body struct {
+			Agents        *int `json:"agents"`
+			TerminalPanes *int `json:"terminalPanes"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		existing, err := db.GetTierConfig(tierName)
+		if err != nil || existing == nil {
+			c.JSON(404, gin.H{"error": "Tier not found"})
+			return
+		}
+
+		if body.Agents != nil {
+			if *body.Agents < 1 || *body.Agents > 999 {
+				c.JSON(400, gin.H{"error": "Agents must be between 1 and 999"})
+				return
+			}
+			existing.Agents = *body.Agents
+		}
+		if body.TerminalPanes != nil {
+			if *body.TerminalPanes < 1 || *body.TerminalPanes > 999 {
+				c.JSON(400, gin.H{"error": "Terminal panes must be between 1 and 999"})
+				return
+			}
+			existing.TerminalPanes = *body.TerminalPanes
+		}
+
+		if err := db.UpdateTierConfig(tierName, *existing); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to update tier"})
+			return
+		}
+		c.JSON(200, gin.H{"ok": true, "config": existing})
+	})
+
+	// POST /api/admin/tier-configs — create new tier
+	adminApi.POST("/tier-configs", func(c *gin.Context) {
+		var body struct {
+			Tier          string `json:"tier"`
+			Agents        int    `json:"agents"`
+			TerminalPanes int    `json:"terminalPanes"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		tierName := strings.ToLower(strings.TrimSpace(body.Tier))
+		if tierName == "" {
+			c.JSON(400, gin.H{"error": "Tier name is required"})
+			return
+		}
+		if len(tierName) > 32 {
+			c.JSON(400, gin.H{"error": "Tier name too long (max 32 chars)"})
+			return
+		}
+		// Check duplicate
+		if existing, _ := db.GetTierConfig(tierName); existing != nil {
+			c.JSON(409, gin.H{"error": "Tier '" + tierName + "' already exists"})
+			return
+		}
+		if body.Agents < 1 || body.Agents > 999 {
+			c.JSON(400, gin.H{"error": "Agents must be between 1 and 999"})
+			return
+		}
+		if body.TerminalPanes < 1 || body.TerminalPanes > 999 {
+			c.JSON(400, gin.H{"error": "Terminal panes must be between 1 and 999"})
+			return
+		}
+
+		cfg := db.TierConfig{Tier: tierName, Agents: body.Agents, TerminalPanes: body.TerminalPanes}
+		if err := db.CreateTierConfig(cfg); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to create tier: " + err.Error()})
+			return
+		}
+		c.JSON(201, gin.H{"ok": true, "config": cfg})
+	})
+
+	// DELETE /api/admin/tier-configs/:tier
+	adminApi.DELETE("/tier-configs/:tier", func(c *gin.Context) {
+		tierName := strings.ToLower(c.Param("tier"))
+
+		existing, err := db.GetTierConfig(tierName)
+		if err != nil || existing == nil {
+			c.JSON(404, gin.H{"error": "Tier not found"})
+			return
+		}
+
+		count, _ := db.CountUsersByTier(tierName)
+		if count > 0 {
+			c.JSON(409, gin.H{"error": fmt.Sprintf("Cannot delete tier '%s': %d user(s) still assigned", tierName, count)})
+			return
+		}
+
+		if err := db.DeleteTierConfig(tierName); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to delete tier"})
+			return
+		}
+		c.JSON(200, gin.H{"ok": true})
+	})
+
+	// PATCH /api/admin/tier-configs/:tier — rename tier
+	adminApi.PATCH("/tier-configs/:tier", func(c *gin.Context) {
+		oldName := strings.ToLower(c.Param("tier"))
+
+		var body struct {
+			NewName string `json:"newName"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil {
+			c.JSON(400, gin.H{"error": "Invalid request body"})
+			return
+		}
+
+		newName := strings.ToLower(strings.TrimSpace(body.NewName))
+		if newName == "" {
+			c.JSON(400, gin.H{"error": "New name is required"})
+			return
+		}
+		if len(newName) > 32 {
+			c.JSON(400, gin.H{"error": "Tier name too long (max 32 chars)"})
+			return
+		}
+		if newName == oldName {
+			c.JSON(400, gin.H{"error": "New name is the same as current name"})
+			return
+		}
+
+		// Check old exists
+		if existing, _ := db.GetTierConfig(oldName); existing == nil {
+			c.JSON(404, gin.H{"error": "Tier not found"})
+			return
+		}
+		// Check new doesn't exist
+		if existing, _ := db.GetTierConfig(newName); existing != nil {
+			c.JSON(409, gin.H{"error": "Tier '" + newName + "' already exists"})
+			return
+		}
+
+		if err := db.RenameTierConfig(oldName, newName); err != nil {
+			c.JSON(500, gin.H{"error": "Failed to rename tier: " + err.Error()})
+			return
+		}
+		c.JSON(200, gin.H{"ok": true, "oldName": oldName, "newName": newName})
 	})
 }
 

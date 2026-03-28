@@ -157,6 +157,44 @@ html, body {
   display: none;
 }
 
+/* Custom Select Trigger */
+.custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 5px 8px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.custom-select-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.custom-select-trigger.open {
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.cs-arrow {
+  font-size: 10px;
+  color: #6a6a8a;
+  margin-left: 4px;
+}
+
+/* Selected option highlight in dropdown panel */
+.custom-select-panel {
+  z-index: 100001;
+}
+.custom-select-panel .menu-item.cs-active {
+  background: rgba(var(--accent-rgb), 0.15);
+  color: #e0e0e0;
+}
+
 .menu-item {
   display: flex;
   align-items: center;

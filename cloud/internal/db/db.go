@@ -107,4 +107,29 @@ func runMigrations() {
 	for _, m := range migrations {
 		_, _ = db.Exec(m)
 	}
+
+	// Seed tier_configs with defaults if empty
+	seedTierDefaults()
+}
+
+func seedTierDefaults() {
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM tier_configs").Scan(&count)
+	if count > 0 {
+		return
+	}
+	defaults := []struct {
+		tier          string
+		agents        int
+		terminalPanes int
+	}{
+		{"free", 2, 7},
+		{"pro", 6, 40},
+		{"poweruser", 24, 160},
+	}
+	for _, d := range defaults {
+		db.Exec("INSERT OR IGNORE INTO tier_configs (tier, agents, terminal_panes) VALUES (?,?,?)",
+			d.tier, d.agents, d.terminalPanes)
+	}
+	fmt.Println("[db] tier_configs seeded with defaults")
 }

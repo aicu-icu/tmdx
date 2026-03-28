@@ -123,6 +123,7 @@
     ];
     if (isAdmin) {
       sections.push({ key: 'admin', label: 'User Management', icon: '\u{1F465}' });
+      sections.push({ key: 'tiers', label: 'Tier Management', icon: '\u{1F3F7}\uFE0F' });
     }
 
     let activeSection = sections[0].key;
@@ -246,8 +247,41 @@
             <div style="font-size:14px;font-weight:500;">Users</div>
             <div id="admin-user-count" style="font-size:11px;color:#6a6a8a;">Loading...</div>
           </div>
-          <div id="admin-user-list" style="overflow-y:auto;max-height:calc(75vh - 120px);">
+          <div id="admin-user-list" style="overflow-y:auto;max-height:calc(75vh - 80px);">
             <div style="font-size:12px;color:#6a6a8a;padding:20px;text-align:center;">Loading user list...</div>
+          </div>
+        </div>`;
+    }
+
+    function renderTierManagement() {
+      return `
+        <div id="tier-mgmt-container">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+            <div style="font-size:14px;font-weight:500;">Tiers</div>
+            <button id="tier-add-btn" style="background:rgba(var(--accent-rgb),0.15);border:1px solid rgba(var(--accent-rgb),0.3);color:#e0e0e0;font-size:12px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit;">+ Add Tier</button>
+          </div>
+          <div id="tier-add-form" style="display:none;background:rgba(var(--accent-rgb),0.08);border:1px solid rgba(var(--accent-rgb),0.2);border-radius:8px;padding:12px;margin-bottom:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;">
+              <div>
+                <div style="font-size:10px;color:#6a6a8a;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px;">Name</div>
+                <input id="tier-new-name" type="text" placeholder="e.g. enterprise" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e0e0e0;font-size:12px;padding:4px 6px;font-family:inherit;box-sizing:border-box;" />
+              </div>
+              <div>
+                <div style="font-size:10px;color:#6a6a8a;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px;">Agents</div>
+                <input id="tier-new-agents" type="number" value="10" min="1" max="999" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e0e0e0;font-size:12px;padding:4px 6px;font-family:inherit;box-sizing:border-box;" />
+              </div>
+              <div>
+                <div style="font-size:10px;color:#6a6a8a;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px;">Terminal Panes</div>
+                <input id="tier-new-panes" type="number" value="50" min="1" max="999" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e0e0e0;font-size:12px;padding:4px 6px;font-family:inherit;box-sizing:border-box;" />
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+              <button id="tier-create-cancel" style="background:none;border:1px solid rgba(255,255,255,0.1);color:#6a6a8a;font-size:12px;padding:4px 10px;border-radius:4px;cursor:pointer;font-family:inherit;">Cancel</button>
+              <button id="tier-create-confirm" style="background:rgba(var(--accent-rgb),0.2);border:1px solid rgba(var(--accent-rgb),0.4);color:#e0e0e0;font-size:12px;padding:4px 10px;border-radius:4px;cursor:pointer;font-family:inherit;">Create</button>
+            </div>
+          </div>
+          <div id="tier-list">
+            <div style="font-size:12px;color:#6a6a8a;padding:20px;text-align:center;">Loading tiers...</div>
           </div>
         </div>`;
     }
@@ -303,6 +337,7 @@
         case 'appearance':   contentEl.innerHTML = renderAppearance();  bindAppearance(); break;
         case 'shortcuts':    contentEl.innerHTML = renderShortcuts();   break;
         case 'admin':        contentEl.innerHTML = renderAdminPanel();  loadAdminPanel(); break;
+        case 'tiers':        contentEl.innerHTML = renderTierManagement(); loadTierManagement(); break;
       }
     }
 
@@ -475,8 +510,14 @@
       const listEl = contentEl.querySelector('#admin-user-list');
       const countEl = contentEl.querySelector('#admin-user-count');
       try {
-        const data = await cloudFetch('GET', '/api/admin/users');
-        const users = data.users || [];
+        // Fetch tier configs and users in parallel
+        const [tierData, userData] = await Promise.all([
+          cloudFetch('GET', '/api/admin/tier-configs'),
+          cloudFetch('GET', '/api/admin/users'),
+        ]);
+        const configs = tierData.configs || {};
+        const tierNames = Object.keys(configs).sort();
+        const users = userData.users || [];
         countEl.textContent = users.length + ' user' + (users.length !== 1 ? 's' : '');
 
         if (users.length === 0) {
@@ -484,11 +525,12 @@
           return;
         }
 
-        const tierColors = { free: '#6a6a8a', pro: '#4ec9b0', poweruser: '#e0a0ff' };
+        // Build user cards with placeholder slots for custom selects
         listEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;">
           ${users.map(u => {
             const isMe = u.id === user.id;
-            return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;">
+            return `<div class="admin-user-card" data-userid="${u.id}" data-role="${u.role}" data-tier="${u.tier}" data-self="${isMe ? '1' : '0'}"
+              style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;">
               <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                 <div>
                   <span style="font-size:13px;font-weight:500;">${escapeHtml(u.displayName || u.username)}</span>
@@ -500,49 +542,56 @@
               <div style="display:flex;gap:8px;">
                 <div style="flex:1;">
                   <div style="font-size:10px;color:#6a6a8a;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px;">Role</div>
-                  <select class="admin-role-select" data-userid="${u.id}" ${isMe ? 'disabled' : ''} style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e0e0e0;font-size:12px;padding:4px 6px;font-family:inherit;${isMe ? 'opacity:0.6;cursor:not-allowed;' : 'cursor:pointer;'}">
-                    <option value="user" ${u.role === 'user' ? 'selected' : ''}>User</option>
-                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
-                  </select>
+                  <div class="admin-role-slot" data-userid="${u.id}" style="${isMe ? 'opacity:0.5;pointer-events:none;' : ''}"></div>
                 </div>
                 <div style="flex:1;">
                   <div style="font-size:10px;color:#6a6a8a;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px;">Tier</div>
-                  <select class="admin-tier-select" data-userid="${u.id}" style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e0e0e0;font-size:12px;padding:4px 6px;font-family:inherit;cursor:pointer;">
-                    <option value="free" ${u.tier === 'free' ? 'selected' : ''}>Free</option>
-                    <option value="pro" ${u.tier === 'pro' ? 'selected' : ''}>Pro</option>
-                    <option value="poweruser" ${u.tier === 'poweruser' ? 'selected' : ''}>Power</option>
-                  </select>
+                  <div class="admin-tier-slot" data-userid="${u.id}"></div>
                 </div>
               </div>
             </div>`;
           }).join('')}
         </div>`;
 
-        // Bind change handlers
-        listEl.querySelectorAll('.admin-role-select').forEach(sel => {
-          sel.addEventListener('change', async () => {
-            const userId = sel.dataset.userid;
+        // Mount custom selects
+        const roleOptions = [
+          { value: 'user', label: 'User' },
+          { value: 'admin', label: 'Admin' },
+        ];
+        const tierOptions = tierNames.map(t => ({ value: t, label: t }));
+
+        listEl.querySelectorAll('.admin-role-slot').forEach(slot => {
+          const userId = slot.dataset.userid;
+          const card = slot.closest('.admin-user-card');
+          const currentRole = card.dataset.role;
+          const select = createCustomSelect(roleOptions, currentRole, async (val) => {
             try {
-              await cloudFetch('PATCH', `/api/admin/users/${userId}`, { role: sel.value });
+              await cloudFetch('PATCH', `/api/admin/users/${userId}`, { role: val });
               showRelayNotification('Role updated', 'info', 2000);
             } catch (e) {
               showRelayNotification(e.message || 'Failed to update role', 'warning', 3000);
-              loadAdminPanel(); // reload to restore
+              loadAdminPanel();
             }
           });
+          select.el.style.width = '100%';
+          slot.appendChild(select.el);
         });
 
-        listEl.querySelectorAll('.admin-tier-select').forEach(sel => {
-          sel.addEventListener('change', async () => {
-            const userId = sel.dataset.userid;
+        listEl.querySelectorAll('.admin-tier-slot').forEach(slot => {
+          const userId = slot.dataset.userid;
+          const card = slot.closest('.admin-user-card');
+          const currentTier = card.dataset.tier;
+          const select = createCustomSelect(tierOptions, currentTier, async (val) => {
             try {
-              await cloudFetch('PATCH', `/api/admin/users/${userId}`, { tier: sel.value });
+              await cloudFetch('PATCH', `/api/admin/users/${userId}`, { tier: val });
               showRelayNotification('Tier updated', 'info', 2000);
             } catch (e) {
               showRelayNotification(e.message || 'Failed to update tier', 'warning', 3000);
               loadAdminPanel();
             }
           });
+          select.el.style.width = '100%';
+          slot.appendChild(select.el);
         });
 
       } catch (e) {
@@ -557,6 +606,152 @@
         const d = new Date(isoStr);
         return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
       } catch { return isoStr; }
+    }
+
+    // ── Tier Management Panel ──
+    async function loadTierManagement() {
+      const listEl = contentEl.querySelector('#tier-list');
+      const addBtn = contentEl.querySelector('#tier-add-btn');
+      const addForm = contentEl.querySelector('#tier-add-form');
+      const cancelBtn = contentEl.querySelector('#tier-create-cancel');
+      const confirmBtn = contentEl.querySelector('#tier-create-confirm');
+      const newNameInput = contentEl.querySelector('#tier-new-name');
+      const newAgentsInput = contentEl.querySelector('#tier-new-agents');
+      const newPanesInput = contentEl.querySelector('#tier-new-panes');
+
+      // Show/hide add form
+      addBtn.addEventListener('click', () => {
+        addForm.style.display = addForm.style.display === 'none' ? 'block' : 'none';
+        if (addForm.style.display === 'block') newNameInput.focus();
+      });
+      cancelBtn.addEventListener('click', () => { addForm.style.display = 'none'; });
+
+      async function refreshList() {
+        try {
+          const data = await cloudFetch('GET', '/api/admin/tier-configs');
+          const configs = data.configs || {};
+          renderTierList(configs);
+        } catch (e) {
+          listEl.innerHTML = `<div style="font-size:12px;color:#ef4444;padding:20px;text-align:center;">Failed to load tiers: ${escapeHtml(e.message)}</div>`;
+        }
+      }
+
+      function renderTierList(configs) {
+        const names = Object.keys(configs).sort();
+        if (names.length === 0) {
+          listEl.innerHTML = '<div style="font-size:12px;color:#6a6a8a;padding:20px;text-align:center;">No tiers configured</div>';
+          return;
+        }
+
+        listEl.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px;">
+          ${names.map(name => {
+            const cfg = configs[name];
+            const userCount = cfg.userCount || 0;
+            const canDelete = userCount === 0;
+            return `<div class="tier-card" data-tier="${escapeHtml(name)}" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <input type="text" class="tier-name-input" data-original="${escapeHtml(name)}" value="${escapeHtml(name)}"
+                    style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e0e0e0;font-size:13px;font-weight:500;padding:3px 6px;font-family:inherit;width:120px;text-transform:lowercase;" />
+                  <span style="font-size:10px;color:#6a6a8a;">${userCount} user${userCount !== 1 ? 's' : ''}</span>
+                </div>
+                <button class="tier-delete-btn" data-tier="${escapeHtml(name)}" ${canDelete ? '' : 'disabled title="Users are still assigned to this tier"'}
+                  style="background:${canDelete ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.02)'};border:1px solid ${canDelete ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.05)'};color:${canDelete ? '#ef4444' : '#444'};font-size:11px;padding:3px 8px;border-radius:4px;cursor:${canDelete ? 'pointer' : 'not-allowed'};font-family:inherit;">Delete</button>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div>
+                  <div style="font-size:10px;color:#6a6a8a;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px;">Agents</div>
+                  <input type="number" class="tier-quota-input" data-tier="${escapeHtml(name)}" data-field="agents" value="${cfg.agents}" min="1" max="999"
+                    style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e0e0e0;font-size:12px;padding:4px 6px;font-family:inherit;box-sizing:border-box;" />
+                </div>
+                <div>
+                  <div style="font-size:10px;color:#6a6a8a;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px;">Terminal Panes</div>
+                  <input type="number" class="tier-quota-input" data-tier="${escapeHtml(name)}" data-field="terminalPanes" value="${cfg.terminalPanes}" min="1" max="999"
+                    style="width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:#e0e0e0;font-size:12px;padding:4px 6px;font-family:inherit;box-sizing:border-box;" />
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`;
+
+        // Bind quota inputs
+        const saveTimers = {};
+        listEl.querySelectorAll('.tier-quota-input').forEach(input => {
+          input.addEventListener('change', async () => {
+            const tier = input.dataset.tier;
+            const field = input.dataset.field;
+            const val = parseInt(input.value);
+            if (isNaN(val)) return;
+            try {
+              await cloudFetch('PUT', `/api/admin/tier-configs/${tier}`, { [field]: val });
+              showRelayNotification(`${tier} ${field} updated`, 'info', 2000);
+            } catch (e) {
+              showRelayNotification(e.message || 'Failed to update', 'warning', 3000);
+              refreshList();
+            }
+          });
+        });
+
+        // Bind rename inputs (on blur)
+        listEl.querySelectorAll('.tier-name-input').forEach(input => {
+          input.addEventListener('blur', async () => {
+            const oldName = input.dataset.original;
+            const newName = input.value.toLowerCase().trim();
+            if (!newName || newName === oldName) {
+              input.value = oldName;
+              return;
+            }
+            try {
+              await cloudFetch('PATCH', `/api/admin/tier-configs/${oldName}`, { newName });
+              showRelayNotification(`Renamed '${oldName}' to '${newName}'`, 'info', 2000);
+              refreshList();
+            } catch (e) {
+              showRelayNotification(e.message || 'Failed to rename', 'warning', 3000);
+              input.value = oldName;
+            }
+          });
+          input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+        });
+
+        // Bind delete buttons
+        listEl.querySelectorAll('.tier-delete-btn').forEach(btn => {
+          if (btn.disabled) return;
+          btn.addEventListener('click', async () => {
+            const tier = btn.dataset.tier;
+            if (!confirm(`Delete tier '${tier}'? This cannot be undone.`)) return;
+            try {
+              await cloudFetch('DELETE', `/api/admin/tier-configs/${tier}`);
+              showRelayNotification(`Tier '${tier}' deleted`, 'info', 2000);
+              refreshList();
+            } catch (e) {
+              showRelayNotification(e.message || 'Failed to delete', 'warning', 3000);
+              refreshList();
+            }
+          });
+        });
+      }
+
+      // Bind create button
+      confirmBtn.addEventListener('click', async () => {
+        const tierName = newNameInput.value.toLowerCase().trim();
+        const agents = parseInt(newAgentsInput.value);
+        const panes = parseInt(newPanesInput.value);
+        if (!tierName) { showRelayNotification('Tier name is required', 'warning', 3000); return; }
+        if (isNaN(agents) || agents < 1) { showRelayNotification('Agents must be >= 1', 'warning', 3000); return; }
+        if (isNaN(panes) || panes < 1) { showRelayNotification('Terminal panes must be >= 1', 'warning', 3000); return; }
+        try {
+          await cloudFetch('POST', '/api/admin/tier-configs', { tier: tierName, agents, terminalPanes: panes });
+          showRelayNotification(`Tier '${tierName}' created`, 'info', 2000);
+          newNameInput.value = '';
+          addForm.style.display = 'none';
+          refreshList();
+        } catch (e) {
+          showRelayNotification(e.message || 'Failed to create tier', 'warning', 3000);
+        }
+      });
+
+      // Initial load
+      await refreshList();
     }
 
     // ── Initial render ──

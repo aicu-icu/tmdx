@@ -1,6 +1,10 @@
 package billing
 
-import "math"
+import (
+	"math"
+
+	"cloud/internal/db"
+)
 
 const DefaultTier = "pro"
 
@@ -10,11 +14,12 @@ type TierLimits struct {
 	FilePanes     float64 `json:"filePanes"` // Infinity = unlimited
 	Notes         float64 `json:"notes"`
 	GitGraphs     float64 `json:"gitGraphs"`
-	NoteImages    int     `json:"noteImages"`
+	NoteImages    int     `json:"noteImages"` // 0 = unlimited
 	Relay         bool    `json:"relay"`
 	Collaboration bool    `json:"collaboration"`
 }
 
+// Hardcoded defaults used as fallback when DB is unavailable
 var TIERS = map[string]TierLimits{
 	"free": {
 		Agents:        2,
@@ -22,7 +27,7 @@ var TIERS = map[string]TierLimits{
 		FilePanes:     math.Inf(1),
 		Notes:         math.Inf(1),
 		GitGraphs:     math.Inf(1),
-		NoteImages:    10,
+		NoteImages:    0,
 		Relay:         true,
 		Collaboration: false,
 	},
@@ -32,7 +37,7 @@ var TIERS = map[string]TierLimits{
 		FilePanes:     math.Inf(1),
 		Notes:         math.Inf(1),
 		GitGraphs:     math.Inf(1),
-		NoteImages:    100,
+		NoteImages:    0,
 		Relay:         true,
 		Collaboration: false,
 	},
@@ -42,13 +47,25 @@ var TIERS = map[string]TierLimits{
 		FilePanes:     math.Inf(1),
 		Notes:         math.Inf(1),
 		GitGraphs:     math.Inf(1),
-		NoteImages:    400,
+		NoteImages:    0,
 		Relay:         true,
 		Collaboration: false,
 	},
 }
 
 func GetTierLimits(tier string) TierLimits {
+	if cfg, err := db.GetTierConfig(tier); err == nil && cfg != nil {
+		return TierLimits{
+			Agents:        cfg.Agents,
+			TerminalPanes: cfg.TerminalPanes,
+			FilePanes:     math.Inf(1),
+			Notes:         math.Inf(1),
+			GitGraphs:     math.Inf(1),
+			NoteImages:    0,
+			Relay:         true,
+			Collaboration: false,
+		}
+	}
 	if t, ok := TIERS[tier]; ok {
 		return t
 	}

@@ -116,3 +116,9 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_user_created ON messages(user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_user_sender_read ON messages(user_id, sender, read_at);
+
+CREATE TABLE IF NOT EXISTS tier_configs (
+  tier            TEXT PRIMARY KEY,
+  agents          INTEGER NOT NULL DEFAULT 2,
+  terminal_panes  INTEGER NOT NULL DEFAULT 7
+);
