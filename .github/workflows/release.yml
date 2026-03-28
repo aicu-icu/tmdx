@@ -167,10 +167,24 @@ jobs:
       - name: List artifacts
         run: ls -la artifacts/
 
+      - name: Generate changelog body
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            BODY=$(git log --pretty=format:"- %s (%h)" "$PREV_TAG"..HEAD)
+          else
+            BODY=$(git log --pretty=format:"- %s (%h)" HEAD~20..HEAD)
+          fi
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: Release v${{ steps.version.outputs.VERSION }}
+          body: ${{ steps.changelog.outputs.body }}
           generate_release_notes: true
           files: artifacts/*
