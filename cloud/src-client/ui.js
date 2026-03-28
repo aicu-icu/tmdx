@@ -5513,6 +5513,24 @@
 
     setupTutorialMenu();
 
+    // Fullscreen toggle
+    const fsBtn = document.getElementById('fullscreen-toggle');
+    if (fsBtn) {
+      function updateFullscreenIcon() {
+        const isFS = !!document.fullscreenElement;
+        fsBtn.querySelector('.icon-fullscreen-enter').style.display = isFS ? 'none' : '';
+        fsBtn.querySelector('.icon-fullscreen-exit').style.display = isFS ? '' : 'none';
+      }
+      fsBtn.addEventListener('click', () => {
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          document.documentElement.requestFullscreen();
+        }
+      });
+      document.addEventListener('fullscreenchange', updateFullscreenIcon);
+    }
+
     document.getElementById('zoom-in').addEventListener('click', () => {
       setZoom(state.zoom * 1.2, window.innerWidth / 2, window.innerHeight / 2);
     });
