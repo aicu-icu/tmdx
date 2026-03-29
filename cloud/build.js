@@ -10,7 +10,12 @@ const publicDir = join(__dirname, 'internal', 'static', 'public');
 
 // app.js is split into multiple files, concatenated at build time
 // Order matters — each file is a fragment of the same IIFE scope
-const APP_PARTS = ['core.js', 'hud.js', 'ws.js', 'settings.js', 'ui.js'];
+const APP_PARTS = [
+  'core.js', 'hud.js', 'ws.js', 'settings.js',
+  'agent-helpers.js', 'terminal-pane.js', 'file-pane.js',
+  'note-pane.js', 'todo-pane.js', 'git-pane.js',
+  'iframe-pane.js', 'folder-pane.js', 'ui.js'
+];
 
 // Standalone files to process as-is
 const STANDALONE = ['themes.js', 'analytics.js', 'tutorial.js', 'tutorial-getting-started.js', 'tutorial-panes.js'];
