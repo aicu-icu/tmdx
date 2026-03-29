@@ -15,10 +15,12 @@ import (
 	"sync"
 	"time"
 
+	"agent/internal/config"
 	"agent/internal/protocol"
 	"agent/internal/sanitize"
 	metrics "agent/internal/services"
 	"agent/internal/terminal"
+	"agent/internal/update"
 )
 
 const maxFileSize = 1 * 1024 * 1024
@@ -197,9 +199,83 @@ func (r *Router) HandleMessage(msg protocol.Message) {
 		log.Printf("[Agent] Update available: %v", msg.Payload)
 	case "update:install":
 		log.Println("[Agent] Update requested by user")
+		go r.handleUpdateInstall()
 	default:
 		log.Printf("[MessageRouter] Unknown message type: %s", msg.Type)
 	}
+}
+
+func (r *Router) handleUpdateInstall() {
+	suffix := config.GetPlatformSuffix()
+
+	r.sendToRelay("update:progress", map[string]interface{}{
+		"status": "checking",
+	}, nil)
+
+	info, err := update.CheckLatest(suffix)
+	if err != nil {
+		log.Printf("[Agent] Update check failed: %v", err)
+		r.sendToRelay("update:progress", map[string]interface{}{
+			"status": "failed",
+			"error":  err.Error(),
+		}, nil)
+		return
+	}
+
+	if !info.HasAsset {
+		r.sendToRelay("update:progress", map[string]interface{}{
+			"status": "failed",
+			"error":  "No release asset found for platform " + suffix,
+		}, nil)
+		return
+	}
+
+	var downloaded int64
+	var totalSize int64
+	onProgress := func(d, t int64) {
+		downloaded = d
+		totalSize = t
+		// Throttle: only send every 200KB or at completion
+		if d%(200*1024) < 8192 || d >= t {
+			pct := 0.0
+			if t > 0 {
+				pct = float64(d) / float64(t) * 100
+			}
+			r.sendToRelay("update:progress", map[string]interface{}{
+				"status":     "downloading",
+				"percent":    int(pct),
+				"downloaded": d,
+				"total":      t,
+			}, nil)
+		}
+	}
+
+	r.sendToRelay("update:progress", map[string]interface{}{
+		"status":     "downloading",
+		"percent":    0,
+		"downloaded": 0,
+		"total":      info.Size,
+	}, nil)
+
+	if err := update.DownloadAndReplace(info.DownloadURL, onProgress); err != nil {
+		log.Printf("[Agent] Update download failed: %v", err)
+		r.sendToRelay("update:progress", map[string]interface{}{
+			"status": "failed",
+			"error":  err.Error(),
+		}, nil)
+		return
+	}
+
+	// Send final 100% progress
+	_ = downloaded
+	_ = totalSize
+	r.sendToRelay("update:progress", map[string]interface{}{
+		"status":  "complete",
+		"percent": 100,
+		"version": info.Version,
+	}, nil)
+
+	log.Printf("[Agent] Updated to v%s. Restart to apply.", info.Version)
 }
 
 func (r *Router) handleTerminalAttach(payload interface{}) {

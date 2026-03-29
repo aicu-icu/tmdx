@@ -20,6 +20,7 @@ type ReleaseInfo struct {
 	Version     string
 	DownloadURL string
 	HasAsset    bool
+	Size        int64
 }
 
 // CheckLatest fetches the latest GitHub release and returns info for the cloud binary.
@@ -52,6 +53,7 @@ func CheckLatest() (*ReleaseInfo, error) {
 		Assets  []struct {
 			Name               string `json:"name"`
 			BrowserDownloadURL string `json:"browser_download_url"`
+			Size               int64  `json:"size"`
 		} `json:"assets"`
 	}
 	if err := json.Unmarshal(body, &release); err != nil {
@@ -67,6 +69,7 @@ func CheckLatest() (*ReleaseInfo, error) {
 		if a.Name == targetName {
 			info.DownloadURL = a.BrowserDownloadURL
 			info.HasAsset = true
+			info.Size = a.Size
 			break
 		}
 	}
@@ -74,9 +77,27 @@ func CheckLatest() (*ReleaseInfo, error) {
 	return info, nil
 }
 
+// progressReader wraps an io.Reader and reports download progress.
+type progressReader struct {
+	reader     io.Reader
+	downloaded int64
+	total      int64
+	onProgress func(downloaded, total int64)
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	pr.downloaded += int64(n)
+	if pr.onProgress != nil {
+		pr.onProgress(pr.downloaded, pr.total)
+	}
+	return n, err
+}
+
 // DownloadAndReplace downloads the binary from downloadURL to a temp file,
 // then atomically replaces the current running binary.
-func DownloadAndReplace(downloadURL string) error {
+// onProgress is called with (downloaded, total) bytes during download. May be nil.
+func DownloadAndReplace(downloadURL string, onProgress func(downloaded, total int64)) error {
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to get executable path: %w", err)
@@ -101,7 +122,13 @@ func DownloadAndReplace(downloadURL string) error {
 		return fmt.Errorf("download returned status %d", resp.StatusCode)
 	}
 
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+	totalSize := resp.ContentLength
+	var reader io.Reader = resp.Body
+	if onProgress != nil {
+		reader = &progressReader{reader: resp.Body, total: totalSize, onProgress: onProgress}
+	}
+
+	if _, err := io.Copy(tmpFile, reader); err != nil {
 		tmpFile.Close()
 		return fmt.Errorf("failed to write download: %w", err)
 	}

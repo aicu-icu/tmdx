@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -175,6 +176,34 @@ func setupLandingRoutes(r *gin.Engine, cfg *config.Config) {
 	})
 }
 
+func formatSize(bytes int64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+	)
+	if bytes >= MB {
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(MB))
+	}
+	if bytes >= KB {
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(KB))
+	}
+	return fmt.Sprintf("%d B", bytes)
+}
+
+func formatSpeed(bytesPerSec float64) string {
+	const (
+		KB = 1024
+		MB = KB * 1024
+	)
+	if bytesPerSec >= MB {
+		return fmt.Sprintf("%.1f MB/s", bytesPerSec/MB)
+	}
+	if bytesPerSec >= KB {
+		return fmt.Sprintf("%.1f KB/s", bytesPerSec/KB)
+	}
+	return fmt.Sprintf("%.0f B/s", bytesPerSec)
+}
+
 func handleUpdate() {
 	currentVersion := version.Version
 	if currentVersion == "dev" {
@@ -200,14 +229,50 @@ func handleUpdate() {
 		return
 	}
 
-	fmt.Printf("[cloud] New version available: v%s → v%s\n", currentVersion, info.Version)
-	fmt.Printf("[cloud] Downloading update...\n")
+	fmt.Printf("[cloud] New version available: v%s \u2192 v%s\n", currentVersion, info.Version)
+	if info.Size > 0 {
+		fmt.Printf("[cloud] Downloading update (%s)...\n", formatSize(info.Size))
+	} else {
+		fmt.Printf("[cloud] Downloading update...\n")
+	}
 
-	if err := update.DownloadAndReplace(info.DownloadURL); err != nil {
-		fmt.Fprintf(os.Stderr, "[cloud] Update failed: %v\n", err)
+	startTime := time.Now()
+	var lastPrinted int64
+
+	onProgress := func(downloaded, total int64) {
+		if downloaded-lastPrinted < 65536 && downloaded < total {
+			return
+		}
+		lastPrinted = downloaded
+		elapsed := time.Since(startTime).Seconds()
+		speed := float64(downloaded) / elapsed
+		barWidth := 24
+		var pct float64
+		if total > 0 {
+			pct = float64(downloaded) / float64(total) * 100
+			filled := int(pct / 100 * float64(barWidth))
+			bar := ""
+			for i := 0; i < barWidth; i++ {
+				if i < filled {
+					bar += "\u2588"
+				} else {
+					bar += "\u2591"
+				}
+			}
+			fmt.Printf("\r[cloud] [%s] %5.1f%% (%s / %s) %s", bar, pct, formatSize(downloaded), formatSize(total), formatSpeed(speed))
+		} else {
+			fmt.Printf("\r[cloud] Downloaded %s %s", formatSize(downloaded), formatSpeed(speed))
+		}
+	}
+
+	if err := update.DownloadAndReplace(info.DownloadURL, onProgress); err != nil {
+		fmt.Fprintf(os.Stderr, "\n[cloud] Update failed: %v\n", err)
 		os.Exit(1)
 	}
 
+	elapsed := time.Since(startTime).Seconds()
+	speed := float64(info.Size) / elapsed
+	fmt.Printf("\n[cloud] Download complete (%s in %.1fs, %s)\n", formatSize(info.Size), elapsed, formatSpeed(speed))
 	fmt.Printf("[cloud] Updated successfully to v%s\n", info.Version)
 }
 

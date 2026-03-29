@@ -85,12 +85,15 @@
     }
   }
 
-  function showUpdateProgressToast(agentId, hostname, status) {
+  function showUpdateProgressToast(agentId, hostname, status, payload) {
     const existingToast = document.querySelector(`.update-toast[data-agent-id="${agentId}"]`);
+    const pct = (payload && payload.percent) || 0;
     const statusText = {
-      downloading: 'Downloading update...',
+      checking: 'Checking for updates...',
+      downloading: pct > 0 ? `Downloading... ${pct}%` : 'Downloading update...',
       installing: 'Installing update...',
       restarting: 'Restarting agent...',
+      complete: 'Update complete!',
       failed: 'Update failed!',
     }[status] || status;
 
@@ -98,13 +101,38 @@
       const titleEl = existingToast.querySelector('.notification-title');
       const deviceEl = existingToast.querySelector('.notification-device');
       if (titleEl) titleEl.textContent = `${hostname}: ${statusText}`;
-      if (deviceEl) deviceEl.textContent = status === 'failed' ? 'Please try again later' : '';
+      // Show progress bar for downloading
+      let progressWrap = existingToast.querySelector('.update-progress-wrap');
+      if (status === 'downloading') {
+        if (!progressWrap) {
+          progressWrap = document.createElement('div');
+          progressWrap.className = 'update-progress-wrap';
+          progressWrap.innerHTML = '<div class="update-progress-bar"><div class="update-progress-fill"></div></div><span class="update-progress-detail"></span>';
+          const body = existingToast.querySelector('.notification-body');
+          if (body) body.appendChild(progressWrap);
+        }
+        const fill = progressWrap.querySelector('.update-progress-fill');
+        const detail = progressWrap.querySelector('.update-progress-detail');
+        if (fill) fill.style.width = pct + '%';
+        if (detail && payload) {
+          const dl = payload.downloaded || 0;
+          const tot = payload.total || 0;
+          if (tot > 0) {
+            const dlMB = (dl / 1048576).toFixed(1);
+            const totMB = (tot / 1048576).toFixed(1);
+            detail.textContent = `${dlMB} MB / ${totMB} MB`;
+          }
+        }
+      } else if (progressWrap && status !== 'downloading') {
+        progressWrap.remove();
+      }
+      if (deviceEl) deviceEl.textContent = status === 'failed' ? (payload && payload.error) || 'Please try again later' : '';
       const btn = existingToast.querySelector('.update-now-btn');
       if (btn) btn.style.display = 'none';
       if (status === 'failed') {
         existingToast.style.borderLeftColor = '#ef4444';
         const icon = existingToast.querySelector('.notification-icon');
-        if (icon) { icon.textContent = '✗'; icon.style.color = '#ef4444'; }
+        if (icon) { icon.textContent = '\u2717'; icon.style.color = '#ef4444'; }
         setTimeout(() => {
           existingToast.classList.add('dismissing');
           setTimeout(() => existingToast.remove(), 300);

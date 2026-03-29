@@ -8,3 +8,4 @@ node_modules
 *.min.js
 test/
 logs/
+.opencode

@@ -571,7 +571,10 @@
         const { agentId: progAgentId, status: progStatus } = payload;
         const progAgent = agents.find(a => a.agentId === progAgentId);
         const progHostname = progAgent?.hostname || progAgentId.slice(0, 8);
-        showUpdateProgressToast(progAgentId, progHostname, progStatus);
+        showUpdateProgressToast(progAgentId, progHostname, progStatus, payload);
+        if (progStatus === 'complete') {
+          showUpdateCompleteToast(progAgentId, progHostname, payload.version || '');
+        }
         updateAgentsHud();
         break;
       }
