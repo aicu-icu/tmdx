@@ -130,6 +130,94 @@ fmt.Printf("[api] Pairing approved: %s -> agent %s\n", code, agentID)
 - Enable WAL mode and foreign keys on init
 - Store password/token hashes, never plaintext
 - Migrations: `_, _ = db.Exec("ALTER TABLE...")` (ignore errors for idempotency)
+- Schema applied on startup via `//go:embed schema.sql` in `db.go`
+- Use `sql.NullString` for nullable TEXT columns when scanning rows
+
+### SQLite DateTime Compatibility
+
+**Critical**: SQLite's `datetime('now')` returns `YYYY-MM-DD HH:MM:SS` (space separator). This is **invalid** for JavaScript's `Date()` parser. Always use ISO 8601 format in defaults and queries:
+
+```sql
+-- WRONG: produces "2025-01-15 10:30:45" (space separator, breaks JS)
+DEFAULT (datetime('now'))
+
+-- CORRECT: produces "2025-01-15T10:30:45" (T separator, ISO 8601)
+DEFAULT (strftime('%Y-%m-%dT%H:%M:%S', 'now'))
+```
+
+In Go update queries:
+```go
+// WRONG
+db.Exec(`UPDATE table SET completed_at=datetime('now') WHERE id=?`, id)
+// CORRECT
+db.Exec(`UPDATE table SET completed_at=strftime('%Y-%m-%dT%H:%M:%S', 'now') WHERE id=?`, id)
+```
+
+In JS, add a fallback parser for old data:
+```js
+function parseTodoDate(str) {
+  if (!str) return null;
+  const iso = str.includes('T') ? str : str.replace(' ', 'T');
+  return new Date(iso + 'Z');
+}
+```
+
+### Download Progress Pattern
+
+For `io.Copy` with progress reporting, wrap the reader:
+
+```go
+type progressReader struct {
+    reader     io.Reader
+    downloaded int64
+    total      int64
+    onProgress func(downloaded, total int64)
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+    n, err := pr.reader.Read(p)
+    pr.downloaded += int64(n)
+    if pr.onProgress != nil {
+        pr.onProgress(pr.downloaded, pr.total)
+    }
+    return n, err
+}
+```
+
+Then in `DownloadAndReplace`:
+```go
+totalSize := resp.ContentLength
+var reader io.Reader = resp.Body
+if onProgress != nil {
+    reader = &progressReader{reader: resp.Body, total: totalSize, onProgress: onProgress}
+}
+io.Copy(tmpFile, reader)
+```
+
+For CLI progress bars, use `\r` with Unicode block characters and throttle updates to every 64KB.
+
+### Frontend JS Architecture
+
+- Source files in `cloud/src-client/` — concatenated into one IIFE scope at build time
+- Order: `core.js` → `hud.js` → `ws.js` → `settings.js` → `ui.js`
+- Variables defined in `core.js` are directly accessible in `ui.js` (no module system)
+- `PANE_DEFAULTS` (core.js) — default dimensions per pane type
+- `PANE_ENDPOINT_MAP` (core.js) — maps pane type to API endpoint
+- `PANE_TYPES` (ui.js) — array used by load-persisted-layout logic
+- Minified output in `cloud/internal/static/public/*.min.js` — **not tracked in git**
+- `npm run build` must pass before `make build` (Go embeds the JS)
+
+### Adding a New Pane Type
+
+1. Add defaults in `PANE_DEFAULTS` (core.js)
+2. Add endpoint in `PANE_ENDPOINT_MAP` (core.js)
+3. Add to `PANE_TYPES` array (ui.js)
+4. Add menu button in `index.html` with `data-type` attribute
+5. Add `case` in `triggerMenuItem()` handler (ui.js)
+6. Add `case` in `deletePane()` handler (ui.js)
+7. Create/render pane function (ui.js)
+8. Add CSS styles (styles.css)
+9. Cloud-only pane types must be skipped in the offline placeholder loop in `loadTerminalsFromServer()` (ui.js)
 
 ## Testing
 
@@ -185,3 +273,5 @@ func TestSanitizeIdentifier(t *testing.T) {
 - Frontend assets embedded in `internal/static/public/`
 - Local fonts, Monaco Editor, Marked.js, DOMPurify (no CDN dependencies)
 - `npm run build` minifies JS with terser + obfuscator
+- Minified JS files (app.min.js etc.) are **NOT tracked in git** — only source files in `cloud/src-client/` need committing
+- After JS changes, run `npm run build` then `make build` (Go embeds the minified JS)
