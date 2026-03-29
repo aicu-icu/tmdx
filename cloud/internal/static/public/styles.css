@@ -4075,6 +4075,17 @@ body.cursor-suppressed .pane { pointer-events: none !important; }
     height: 38px;
     font-size: 17px;
   }
+  #settings-btn {
+    bottom: 24px;
+    left: 12px;
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
+  }
+  #settings-btn svg {
+    width: 18px;
+    height: 18px;
+  }
 }
 
 /* ─── Tutorial dropdown menu ─── */

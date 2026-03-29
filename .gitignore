@@ -6,6 +6,7 @@ dist/
 *.db*
 node_modules
 *.min.js
+!cloud/internal/static/public/lib/*.min.js
 test/
 logs/
 .opencode
