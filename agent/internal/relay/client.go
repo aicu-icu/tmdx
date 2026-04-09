@@ -181,6 +181,7 @@ func (c *Client) readMessages() {
 func (c *Client) handleDisconnect() {
 	c.mu.Lock()
 	c.authenticated = false
+	c.conn = nil
 	intentional := c.intentionalClose
 	c.mu.Unlock()
 
@@ -255,6 +256,9 @@ func (c *Client) Send(msg protocol.Message) bool {
 	err = conn.WriteMessage(websocket.TextMessage, data)
 	c.writeMu.Unlock()
 	if err != nil {
+		if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+			return false
+		}
 		log.Printf("[RelayClient] Send error: %v", err)
 		return false
 	}
