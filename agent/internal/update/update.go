@@ -139,10 +139,33 @@ func DownloadAndReplace(downloadURL string, onProgress func(downloaded, total in
 	}
 
 	if err := os.Rename(tmpPath, exePath); err != nil {
-		return fmt.Errorf("failed to replace binary: %w", err)
+		if strings.Contains(err.Error(), "cross-device") || strings.Contains(err.Error(), "invalid argument") {
+			if err := copyFile(tmpPath, exePath); err != nil {
+				return fmt.Errorf("failed to copy binary: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to replace binary: %w", err)
+		}
 	}
 
 	return nil
+}
+
+func copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE, 0755)
+	if err != nil {
+		return err
+	}
+	defer dstFile.Close()
+
+	_, err = io.Copy(dstFile, srcFile)
+	return err
 }
 
 // IsVersionOutdated returns true if current < latest (dot-separated numeric comparison).
